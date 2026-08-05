@@ -3,11 +3,14 @@ from __future__ import annotations
 
 import base64
 import io
+import ipaddress
 import json
 import re
+import socket
 from dataclasses import dataclass
 from pathlib import Path
 
+import httpx
 from PIL import Image
 
 from config import Settings
@@ -91,9 +94,42 @@ def describe_image_info(loaded: LoadedImage) -> str:
     )
 
 
-# _download_url 在 Task 4 实现，先提供占位以便本任务测试通过
-def _download_url(url: str) -> bytes:
-    raise ImageError("URL 下载将在后续任务实现")
+def _host_is_blocked(host: str) -> bool:
+    host = host.strip().lower().rstrip(".")
+    if not host or host == "localhost":
+        return True
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except socket.gaierror:
+        return True
+    for info in infos:
+        addr = ipaddress.ip_address(info[4][0])
+        if (
+            addr.is_private
+            or addr.is_loopback
+            or addr.is_link_local
+            or addr.is_reserved
+            or addr.is_multicast
+            or addr.is_unspecified
+        ):
+            return True
+    return False
+
+
+def _download_url(url: str, timeout: float = 30.0) -> bytes:
+    from urllib.parse import urlparse
+
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"}:
+        raise ImageError("仅支持 http/https 图片 URL")
+    if _host_is_blocked(parsed.hostname or ""):
+        raise ImageError("该 URL 指向内网/本地地址，已拦截（SSRF 防护）")
+    try:
+        resp = httpx.get(url, timeout=timeout, follow_redirects=True)
+        resp.raise_for_status()
+        return resp.content
+    except httpx.HTTPError as exc:
+        raise ImageError(f"下载图片失败：{exc}") from exc
 
 
 @dataclass

@@ -107,3 +107,41 @@ def test_compute_tiles_multi_row():
     assert len(tiles) == 4
     # 边缘块贴右/下边界时左移/上移，避免切出图外
     assert tiles[3].box == (500, 500, 1500, 1500)
+
+
+import httpx
+
+from image_utils import _host_is_blocked
+
+
+def test_host_is_blocked():
+    assert _host_is_blocked("127.0.0.1")
+    assert _host_is_blocked("10.0.0.5")
+    assert _host_is_blocked("192.168.1.1")
+    assert _host_is_blocked("169.254.169.254")
+    assert _host_is_blocked("::1")
+    assert _host_is_blocked("localhost")
+
+
+def test_host_public_not_blocked():
+    assert not _host_is_blocked("8.8.8.8")
+
+
+def test_url_download(monkeypatch):
+    png = _make_png()
+
+    class FakeResp:
+        status_code = 200
+        content = png
+
+        def raise_for_status(self):
+            return None
+
+    monkeypatch.setattr(httpx, "get", lambda *a, **k: FakeResp())
+    loaded = load_image("https://example.com/a.png", Settings(max_pixels=1_000_000))
+    assert loaded.width == 64
+
+
+def test_url_download_blocked_private_ip():
+    with pytest.raises(ImageError, match="SSRF"):
+        load_image("http://169.254.169.254/latest/meta-data", Settings())
