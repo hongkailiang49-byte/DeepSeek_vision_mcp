@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
 
+from cache import ResultCache
 from config import Settings
 from image_utils import (
     ImageError,
@@ -26,15 +28,14 @@ def _error_text(exc: Exception) -> str:
     return f"错误：发生未预期异常（{type(exc).__name__}）：{exc}"
 
 
-async def _analyze(
+async def _analyze_loaded(
     settings: Settings,
-    source: str,
+    loaded: LoadedImage,
     scene: str,
     prompt: str = "",
     force_tile: bool = False,
     tile_size: int = 0,
 ) -> str:
-    loaded = load_image(source, settings)
     provider = get_provider(settings)
     user_prompt = build_prompt(scene, prompt)
 
@@ -65,6 +66,20 @@ async def _analyze(
         )
         results.append(f"【块 {idx}/{len(images)}】{part}")
     return "\n\n".join(results)
+
+
+async def _analyze(
+    settings: Settings,
+    source: str,
+    scene: str,
+    prompt: str = "",
+    force_tile: bool = False,
+    tile_size: int = 0,
+) -> str:
+    loaded = load_image(source, settings)
+    return await _analyze_loaded(
+        settings, loaded, scene, prompt, force_tile, tile_size
+    )
 
 
 def _tile_sources(settings: Settings, loaded: LoadedImage) -> list[LoadedImage]:
@@ -143,6 +158,56 @@ def _fmt_mineru_result(result: dict, max_chars: int = 30_000) -> str:
     lines.append("")
     lines.append(md)
     return "\n".join(lines)
+
+
+_DETECT_PROMPT = (
+    "请判断这张图片最像哪一类，只回答一个词，不要解释："
+    "general（普通照片/风景/物体）、ui（界面/网页/软件截图）、"
+    "table（表格/账单/Excel 截图）、ocr（纯文字/扫描件/文档文字）、"
+    "chart（图表/曲线/柱状图/饼图）、slide（幻灯片/演示文稿页面）、"
+    "document（文档/论文页面）、poster（海报/宣传图）"
+)
+
+_SCENE_ALIASES = {
+    "ocr": {"ocr", "text", "文字", "扫描"},
+    "table": {"table", "表格", "excel"},
+    "ui": {"ui", "界面", "screenshot", "截图", "app", "web", "设计稿"},
+    "chart": {"chart", "graph", "图表", "plot", "曲线"},
+    "slide": {"slide", "ppt", "幻灯片", "演示"},
+    "document": {"document", "doc", "文档", "page"},
+    "poster": {"poster", "海报"},
+}
+
+
+def _normalize_scene(raw: str) -> str:
+    text = (raw or "").strip().lower().strip(".:：。，,、-—*# ")
+    scenes = ("general", "ui", "table", "ocr", "chart", "slide", "document", "poster")
+    if text in scenes:
+        return text
+    for scene, words in _SCENE_ALIASES.items():
+        if any(word in text for word in words):
+            return scene
+    return "general"
+
+
+async def auto_analyze(settings: Settings, source: str, hint: str = "") -> str:
+    loaded = load_image(source, settings)
+    provider = get_provider(settings)
+    cache = ResultCache(settings)
+
+    scene = _normalize_scene(hint) if hint.strip() else ""
+    if not scene:
+        detected = await provider.complete(_DETECT_PROMPT, [loaded.image])
+        scene = _normalize_scene(detected)
+
+    key = ResultCache.key_for(source, scene)
+    cached = cache.get(key)
+    if cached is not None:
+        return f"【缓存】{scene} 分析结果：\n{cached}"
+
+    result = await _analyze_loaded(settings, loaded, scene)
+    cache.put(key, result)
+    return f"图片类型：{scene}\n\n{result}"
 
 
 def register_tools(mcp: FastMCP, settings: Settings) -> None:
@@ -275,5 +340,13 @@ def register_tools(mcp: FastMCP, settings: Settings) -> None:
             client = MinerUClient(settings)
             info = await client.status(task_id=task_id, batch_id=batch_id)
             return json.dumps(info, ensure_ascii=False, indent=2)
+        except Exception as exc:
+            return _error_text(exc)
+
+    @mcp.tool()
+    async def analyze_any(source: str, hint: str = "") -> str:
+        """自动识别图片：先判断类型（UI/表格/OCR/图表/文档/海报/通用）再按场景分析。hint 可选，已知类型时跳过判断。"""
+        try:
+            return await auto_analyze(settings, source, hint)
         except Exception as exc:
             return _error_text(exc)

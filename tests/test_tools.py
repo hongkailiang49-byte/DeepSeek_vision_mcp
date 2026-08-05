@@ -2,6 +2,7 @@ import asyncio
 import base64
 import io
 import json
+from pathlib import Path
 
 from PIL import Image
 from mcp.server.fastmcp import FastMCP
@@ -43,6 +44,7 @@ def test_all_tools_registered():
         "tile_image",
         "parse_document",
         "parse_document_status",
+        "analyze_any",
     }
 
 
@@ -158,6 +160,81 @@ def test_table_export_xlsx(tmp_path):
     assert ws["A1"].value == "Name"
     assert ws["B2"].value == "92"
     assert ws["B3"].value == "85"
+
+
+class FakeAutoProvider:
+    def __init__(self, detections=None, analyses=None):
+        self.detections = list(detections or [])
+        self.analyses = list(analyses or [])
+        self.detection_calls = 0
+
+    async def complete(self, prompt, images):
+        if prompt.startswith("请判断这张图片"):
+            self.detection_calls += 1
+            return self.detections.pop(0) if self.detections else "general"
+        return self.analyses.pop(0) if self.analyses else "[mock] analysis"
+
+
+def _auto_mcp(tmp_path, fake, monkeypatch):
+    import tools as tools_module
+
+    settings = Settings(
+        auto_tile=False,
+        max_pixels=1_000_000,
+        cache_dir=tmp_path / "cache",
+    )
+    monkeypatch.setattr(tools_module, "get_provider", lambda s: fake)
+    mcp = FastMCP("vision-mcp-test")
+    tools_module.register_tools(mcp, settings)
+    return mcp
+
+
+def test_analyze_any_detects_and_routes(monkeypatch, tmp_path):
+    import tools as tools_module
+
+    fake = FakeAutoProvider(detections=["ui"], analyses=["UI 分析结果"])
+    monkeypatch.setattr(tools_module, "get_provider", lambda s: fake)
+    mcp = _auto_mcp(tmp_path, fake, monkeypatch)
+    text = _call(mcp, "analyze_any", {"source": _data_url()})
+    assert "图片类型：ui" in text
+    assert "UI 分析结果" in text
+    assert fake.detection_calls == 1
+
+
+def test_analyze_any_hint_skips_detection(monkeypatch, tmp_path):
+    import tools as tools_module
+
+    fake = FakeAutoProvider(detections=["ui"], analyses=["表格结果"])
+    monkeypatch.setattr(tools_module, "get_provider", lambda s: fake)
+    mcp = _auto_mcp(tmp_path, fake, monkeypatch)
+    text = _call(mcp, "analyze_any", {"source": _data_url(), "hint": "table"})
+    assert "图片类型：table" in text
+    assert "表格结果" in text
+    assert fake.detection_calls == 0
+
+
+def test_analyze_any_falls_back_to_general(monkeypatch, tmp_path):
+    import tools as tools_module
+
+    fake = FakeAutoProvider(detections=["看不懂"], analyses=["通用结果"])
+    monkeypatch.setattr(tools_module, "get_provider", lambda s: fake)
+    mcp = _auto_mcp(tmp_path, fake, monkeypatch)
+    text = _call(mcp, "analyze_any", {"source": _data_url()})
+    assert "图片类型：general" in text
+    assert "通用结果" in text
+
+
+def test_analyze_any_cache_hit(monkeypatch, tmp_path):
+    import tools as tools_module
+
+    fake = FakeAutoProvider(detections=["ui"], analyses=["第一次结果"])
+    monkeypatch.setattr(tools_module, "get_provider", lambda s: fake)
+    mcp = _auto_mcp(tmp_path, fake, monkeypatch)
+    first = _call(mcp, "analyze_any", {"source": _data_url(), "hint": "ui"})
+    second = _call(mcp, "analyze_any", {"source": _data_url(), "hint": "ui"})
+    assert "第一次结果" in first
+    assert "【缓存】" in second
+    assert "第一次结果" in second
 
 
 class FakeMinerUClient:
