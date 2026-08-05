@@ -17,6 +17,8 @@
 - `tile_image` 大图切片逐块分析
 - `parse_document` 用 MinerU 把 PDF/Word/PPT/图片/HTML 解析为 Markdown
 - `parse_document_status` 查询 MinerU 解析任务状态
+- `analyze_any` 自动分诊：判断图片类型（UI/表格/OCR/图表/文档/海报/通用）后按场景分析，带结果缓存
+- `scan_folder` 扫描目录新增图片并自动分析（可配合定时自动化）
 
 ## 安装
 
@@ -47,6 +49,10 @@ startup_timeout_sec = 60
 - Gemini：`VISION_PROVIDER=gemini` + `GEMINI_API_KEY=...`（或 `VISION_API_KEY`）；如网络受限，设置 `VISION_PROXY=http://127.0.0.1:7897`（本地代理端口按需修改）
 - 本地 Ollama：`VISION_API_BASE=http://localhost:11434/v1`、`VISION_API_KEY=ollama`、`VISION_MODEL=llava`
 - 无 key 调试：`VISION_MOCK=1`
+
+## 自动识别
+
+在 cc-switch 的 Prompts 面板启用“视觉自动识别”Codex 预设（写入 `~/.codex/AGENTS.md`）后，Codex 遇到与任务相关的图片会自动调用视觉工具，无需手动指定。规则：按需分析（相关才调用）、禁止反问、禁止虚构图片内容。
 
 ## MinerU 文档解析
 

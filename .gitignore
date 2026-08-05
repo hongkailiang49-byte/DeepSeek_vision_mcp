@@ -11,6 +11,7 @@ venv/
 
 # 运行时产物
 vision-mcp/output/
+vision-mcp/.cache/
 
 # 编辑器
 .vscode/
