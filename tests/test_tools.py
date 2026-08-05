@@ -116,3 +116,43 @@ def test_auto_tile_off_sends_single():
     register_tools(mcp, settings)
     text = _call(mcp, "analyze_image", {"image": _data_url(width=200, height=100)})
     assert "已收到 1 张图片" in text
+
+
+def test_table_export_xlsx(tmp_path):
+    settings = Settings(
+        mock=False,
+        auto_tile=False,
+        max_pixels=1_000_000,
+        output_dir=tmp_path,
+    )
+
+    class TableMock:
+        async def complete(self, prompt, images):
+            return "| Name | Score |\n|---|---|\n| Alice | 92 |\n| Bob | 85 |"
+
+    import tools as tools_module
+
+    original = tools_module.get_provider
+    tools_module.get_provider = lambda s: TableMock()
+    try:
+        mcp = FastMCP("vision-mcp-test")
+        tools_module.register_tools(mcp, settings)
+        text = _call(
+            mcp,
+            "table_from_image",
+            {"image": _data_url(), "export_xlsx": True, "out_path": "out.xlsx"},
+        )
+    finally:
+        tools_module.get_provider = original
+
+    assert "表格识别结果" in text
+    assert "已导出 Excel" in text
+    out = tmp_path / "out.xlsx"
+    assert out.is_file()
+
+    from openpyxl import load_workbook
+
+    ws = load_workbook(out).active
+    assert ws["A1"].value == "Name"
+    assert ws["B2"].value == "92"
+    assert ws["B3"].value == "85"
