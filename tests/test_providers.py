@@ -91,3 +91,47 @@ def test_failure_raises_provider_error(monkeypatch):
         raise AssertionError("should have raised")
     except ProviderError as exc:
         assert "401" in str(exc)
+
+
+from providers import GeminiProvider, MockProvider, get_provider
+
+
+def test_get_provider_mock():
+    assert isinstance(get_provider(Settings(mock=True)), MockProvider)
+
+
+def test_get_provider_gemini():
+    assert isinstance(get_provider(Settings(provider="gemini", api_key="k")), GeminiProvider)
+
+
+def test_get_provider_auto():
+    assert isinstance(
+        get_provider(Settings(provider="auto", api_key="k")),
+        OpenAICompatibleProvider,
+    )
+
+
+def test_mock_complete():
+    async def run():
+        provider = MockProvider(Settings(mock=True))
+        return await provider.complete("hi", [Image.new("RGB", (4, 4))])
+
+    text = asyncio.run(run())
+    assert "[mock]" in text
+    assert "4x4" in text
+
+
+def test_gemini_payload_flow(monkeypatch):
+    ok = FakeResponse(
+        200,
+        data={"candidates": [{"content": {"parts": [{"text": "gemini ok"}]}}]},
+    )
+    client = FakeClient([ok])
+    monkeypatch.setattr("httpx.AsyncClient", lambda **kw: client)
+
+    async def run():
+        provider = GeminiProvider(Settings(provider="gemini", api_key="k", timeout_ms=1000))
+        return await provider.complete("hi", [Image.new("RGB", (4, 4))])
+
+    assert asyncio.run(run()) == "gemini ok"
+    assert client.last_kwargs["params"] == {"key": "k"}

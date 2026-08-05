@@ -77,3 +77,74 @@ class OpenAICompatibleProvider(BaseProvider):
                     raise ProviderError("模型返回了空内容")
                 return str(text).strip()
         raise ProviderError("上游重试后仍失败")
+
+
+class GeminiProvider(BaseProvider):
+    def __init__(self, settings: Settings) -> None:
+        self.settings = settings
+
+    async def complete(self, prompt: str, images: list[Image.Image]) -> str:
+        key = self.settings.api_key or self.settings.zhipu_api_key
+        if not key:
+            raise ProviderError("缺少 Gemini API key（VISION_API_KEY）")
+        model = self.settings.model or "gemini-2.5-flash"
+        url = (
+            f"https://generativelanguage.googleapis.com/v1beta/models/"
+            f"{model}:generateContent"
+        )
+        parts: list[dict] = [{"text": prompt}]
+        for img in images:
+            buf = io.BytesIO()
+            img.convert("RGB").save(buf, format="PNG")
+            parts.append(
+                {
+                    "inline_data": {
+                        "mime_type": "image/png",
+                        "data": base64.b64encode(buf.getvalue()).decode(),
+                    }
+                }
+            )
+        payload = {"contents": [{"parts": parts}]}
+        timeout = self.settings.timeout_ms / 1000
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            for attempt in range(3):
+                try:
+                    resp = await client.post(url, params={"key": key}, json=payload)
+                except httpx.HTTPError as exc:
+                    if attempt < 2:
+                        await asyncio.sleep(1.5**attempt)
+                        continue
+                    raise ProviderError(f"Gemini 请求失败：{exc}") from exc
+                if resp.status_code in {429, 500, 502, 503, 504} and attempt < 2:
+                    await asyncio.sleep(1.5**attempt)
+                    continue
+                if resp.status_code >= 400:
+                    raise ProviderError(f"Gemini 返回 {resp.status_code}：{resp.text[:300]}")
+                data = resp.json()
+                try:
+                    text = data["candidates"][0]["content"]["parts"][0]["text"]
+                except (KeyError, IndexError, TypeError) as exc:
+                    raise ProviderError(f"Gemini 响应结构异常：{data}") from exc
+                if not text:
+                    raise ProviderError("Gemini 返回了空内容")
+                return str(text).strip()
+        raise ProviderError("Gemini 重试后仍失败")
+
+
+class MockProvider(BaseProvider):
+    def __init__(self, settings: Settings) -> None:
+        self.settings = settings
+
+    async def complete(self, prompt: str, images: list[Image.Image]) -> str:
+        sizes = "、".join(f"{img.width}x{img.height}" for img in images)
+        return f"[mock] 已收到 {len(images)} 张图片（{sizes}）。提示词：{prompt[:80]}"
+
+
+def get_provider(settings: Settings) -> BaseProvider:
+    if settings.mock or settings.provider == "mock":
+        return MockProvider(settings)
+    if settings.provider == "gemini":
+        return GeminiProvider(settings)
+    if settings.provider in {"auto", "openai"}:
+        return OpenAICompatibleProvider(settings)
+    raise ProviderError(f"未知 VISION_PROVIDER：{settings.provider}")
