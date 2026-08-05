@@ -1,6 +1,7 @@
 """9 个 MCP 工具定义。"""
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
@@ -14,12 +15,13 @@ from image_utils import (
     load_image,
     resize_to_max_dim,
 )
+from mineru import MinerUClient, MinerUError
 from prompts import build_prompt
 from providers import ProviderError, get_provider
 
 
 def _error_text(exc: Exception) -> str:
-    if isinstance(exc, (ImageError, ProviderError, ValueError)):
+    if isinstance(exc, (ImageError, ProviderError, MinerUError, ValueError)):
         return f"错误：{exc}"
     return f"错误：发生未预期异常（{type(exc).__name__}）：{exc}"
 
@@ -120,6 +122,29 @@ def _write_xlsx(rows: list[list[str]], out_path: Path) -> str:
     return str(out_path)
 
 
+def _fmt_mineru_result(result: dict, max_chars: int = 30_000) -> str:
+    if result.get("state") != "done":
+        lines = [f"MinerU 任务已提交（state={result.get('state')}）"]
+        if result.get("task_id"):
+            lines.append(f"task_id：{result['task_id']}")
+        if result.get("batch_id"):
+            lines.append(f"batch_id：{result['batch_id']}")
+        lines.append(result.get("message", "可稍后调用 parse_document_status 查询。"))
+        return "\n".join(lines)
+    lines = ["MinerU 解析完成"]
+    if result.get("source"):
+        lines.append(f"来源：{result['source']}")
+    if result.get("md_path"):
+        lines.append(f"Markdown 已保存：{result['md_path']}")
+    md = result.get("markdown", "")
+    if len(md) > max_chars:
+        lines.append(f"（内容较长，仅显示前 {max_chars} 字符）")
+        md = md[:max_chars]
+    lines.append("")
+    lines.append(md)
+    return "\n".join(lines)
+
+
 def register_tools(mcp: FastMCP, settings: Settings) -> None:
     @mcp.tool()
     async def analyze_image(image: str, prompt: str = "", scene: str = "general") -> str:
@@ -207,5 +232,48 @@ def register_tools(mcp: FastMCP, settings: Settings) -> None:
             return await _analyze(
                 settings, image, "general", prompt, force_tile=True, tile_size=tile_size
             )
+        except Exception as exc:
+            return _error_text(exc)
+
+    @mcp.tool()
+    async def parse_document(
+        source: str,
+        model_version: str = "",
+        is_ocr: bool = False,
+        enable_table: bool = True,
+        enable_formula: bool = True,
+        language: str = "ch",
+        page_ranges: str = "",
+        save_md: bool = True,
+        out_dir: str = "",
+        max_wait_s: int = 0,
+    ) -> str:
+        """用 MinerU 将 PDF/Word/PPT/图片/HTML 解析为 Markdown（本地路径或 URL）。"""
+        try:
+            client = MinerUClient(settings)
+            wait = max_wait_s if max_wait_s > 0 else settings.mineru_max_wait_s
+            result = await client.parse(
+                source,
+                out_dir=Path(out_dir) if out_dir.strip() else None,
+                save_md=save_md,
+                max_wait_s=wait,
+                model_version=model_version,
+                is_ocr=is_ocr,
+                enable_table=enable_table,
+                enable_formula=enable_formula,
+                language=language,
+                page_ranges=page_ranges,
+            )
+            return _fmt_mineru_result(result)
+        except Exception as exc:
+            return _error_text(exc)
+
+    @mcp.tool()
+    async def parse_document_status(task_id: str = "", batch_id: str = "") -> str:
+        """查询 MinerU 文档解析任务状态（parse_document 返回 pending 时使用）。"""
+        try:
+            client = MinerUClient(settings)
+            info = await client.status(task_id=task_id, batch_id=batch_id)
+            return json.dumps(info, ensure_ascii=False, indent=2)
         except Exception as exc:
             return _error_text(exc)

@@ -21,10 +21,15 @@ class FakeResponse:
 
 
 class FakeClient:
-    def __init__(self, responses):
+    def __init__(self, responses, **init_kwargs):
         self.responses = responses
+        self.init_kwargs = init_kwargs
         self.calls = 0
         self.last_kwargs = None
+
+    def init(self, **kwargs):
+        self.init_kwargs = kwargs
+        return self
 
     async def __aenter__(self):
         return self
@@ -135,3 +140,65 @@ def test_gemini_payload_flow(monkeypatch):
 
     assert asyncio.run(run()) == "gemini ok"
     assert client.last_kwargs["params"] == {"key": "k"}
+
+
+def test_openai_provider_passes_proxy(monkeypatch):
+    ok = FakeResponse(200, data={"choices": [{"message": {"content": "ok"}}]})
+    client = FakeClient([ok])
+    monkeypatch.setattr("httpx.AsyncClient", lambda **kw: client.init(**kw))
+
+    async def run():
+        provider = OpenAICompatibleProvider(
+            Settings(api_key="k", timeout_ms=1000, proxy="http://127.0.0.1:7897")
+        )
+        return await provider.complete("hi", [Image.new("RGB", (4, 4))])
+
+    assert asyncio.run(run()) == "ok"
+    assert client.init_kwargs["proxy"] == "http://127.0.0.1:7897"
+
+
+def test_gemini_provider_prefers_gemini_api_key(monkeypatch):
+    ok = FakeResponse(
+        200,
+        data={"candidates": [{"content": {"parts": [{"text": "ok"}]}}]},
+    )
+    client = FakeClient([ok])
+    monkeypatch.setattr("httpx.AsyncClient", lambda **kw: client)
+
+    async def run():
+        provider = GeminiProvider(
+            Settings(
+                provider="gemini",
+                gemini_api_key="gk",
+                api_key="ak",
+                zhipu_api_key="zk",
+                timeout_ms=1000,
+            )
+        )
+        return await provider.complete("hi", [Image.new("RGB", (4, 4))])
+
+    assert asyncio.run(run()) == "ok"
+    assert client.last_kwargs["params"] == {"key": "gk"}
+
+
+def test_gemini_provider_passes_proxy(monkeypatch):
+    ok = FakeResponse(
+        200,
+        data={"candidates": [{"content": {"parts": [{"text": "ok"}]}}]},
+    )
+    client = FakeClient([ok])
+    monkeypatch.setattr("httpx.AsyncClient", lambda **kw: client.init(**kw))
+
+    async def run():
+        provider = GeminiProvider(
+            Settings(
+                provider="gemini",
+                api_key="k",
+                timeout_ms=1000,
+                proxy="http://127.0.0.1:7897",
+            )
+        )
+        return await provider.complete("hi", [Image.new("RGB", (4, 4))])
+
+    assert asyncio.run(run()) == "ok"
+    assert client.init_kwargs["proxy"] == "http://127.0.0.1:7897"

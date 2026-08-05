@@ -21,6 +21,21 @@ def _img_data_url(img: Image.Image) -> str:
     return f"data:image/png;base64,{base64.b64encode(buf.getvalue()).decode()}"
 
 
+def async_client_kwargs(settings: Settings) -> dict:
+    """构造 httpx.AsyncClient 参数，兼容 httpx 0.27/0.28 的代理写法。"""
+    kwargs = {"timeout": settings.timeout_ms / 1000}
+    if settings.proxy:
+        version = tuple(int(part) for part in httpx.__version__.split(".")[:2])
+        if version >= (0, 28):
+            kwargs["proxy"] = settings.proxy
+        else:
+            kwargs["proxies"] = {
+                "http://": settings.proxy,
+                "https://": settings.proxy,
+            }
+    return kwargs
+
+
 class BaseProvider:
     async def complete(self, prompt: str, images: list[Image.Image]) -> str:
         raise NotImplementedError
@@ -48,8 +63,7 @@ class OpenAICompatibleProvider(BaseProvider):
         url = self.settings.api_base.rstrip("/") + "/chat/completions"
         headers = self._headers()
         payload = self._payload(prompt, images)
-        timeout = self.settings.timeout_ms / 1000
-        async with httpx.AsyncClient(timeout=timeout) as client:
+        async with httpx.AsyncClient(**async_client_kwargs(self.settings)) as client:
             for attempt in range(3):
                 try:
                     resp = await client.post(url, headers=headers, json=payload)
@@ -84,9 +98,13 @@ class GeminiProvider(BaseProvider):
         self.settings = settings
 
     async def complete(self, prompt: str, images: list[Image.Image]) -> str:
-        key = self.settings.api_key or self.settings.zhipu_api_key
+        key = (
+            self.settings.gemini_api_key
+            or self.settings.api_key
+            or self.settings.zhipu_api_key
+        )
         if not key:
-            raise ProviderError("缺少 Gemini API key（VISION_API_KEY）")
+            raise ProviderError("缺少 Gemini API key（GEMINI_API_KEY 或 VISION_API_KEY）")
         model = self.settings.model or "gemini-flash-latest"
         url = (
             f"https://generativelanguage.googleapis.com/v1beta/models/"
@@ -105,8 +123,7 @@ class GeminiProvider(BaseProvider):
                 }
             )
         payload = {"contents": [{"parts": parts}]}
-        timeout = self.settings.timeout_ms / 1000
-        async with httpx.AsyncClient(timeout=timeout) as client:
+        async with httpx.AsyncClient(**async_client_kwargs(self.settings)) as client:
             for attempt in range(3):
                 try:
                     resp = await client.post(url, params={"key": key}, json=payload)

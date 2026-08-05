@@ -5,7 +5,11 @@ from config import Settings, load_settings
 
 def test_load_settings_uses_defaults(monkeypatch, tmp_path):
     for name in list(os.environ):
-        if name.startswith("VISION_") or name == "ZHIPU_API_KEY":
+        if (
+            name.startswith("VISION_")
+            or name.startswith("MINERU_")
+            or name in {"ZHIPU_API_KEY", "GEMINI_API_KEY"}
+        ):
             monkeypatch.delenv(name, raising=False)
     env = tmp_path / ".env"
     env.write_text("# empty\n", encoding="utf-8")
@@ -14,11 +18,21 @@ def test_load_settings_uses_defaults(monkeypatch, tmp_path):
     assert settings.provider == "auto"
     assert settings.auto_tile is True
     assert settings.timeout_ms == 60_000
+    assert settings.proxy == ""
+    assert settings.gemini_api_key == ""
+    assert settings.mineru_api_key == ""
+    assert settings.mineru_api_base == "https://mineru.net/api/v4"
+    assert settings.mineru_model_version == "vlm"
+    assert settings.mineru_max_wait_s == 600
 
 
 def test_load_settings_reads_env_file(monkeypatch, tmp_path):
     for name in list(os.environ):
-        if name.startswith("VISION_") or name == "ZHIPU_API_KEY":
+        if (
+            name.startswith("VISION_")
+            or name.startswith("MINERU_")
+            or name in {"ZHIPU_API_KEY", "GEMINI_API_KEY"}
+        ):
             monkeypatch.delenv(name, raising=False)
     env = tmp_path / ".env"
     env.write_text(
@@ -32,6 +46,31 @@ def test_load_settings_reads_env_file(monkeypatch, tmp_path):
     assert settings.zhipu_api_key == "sk-test"
     assert settings.auto_tile is False
     assert settings.timeout_ms == 30_000
+
+
+def test_load_settings_reads_mineru_gemini_proxy(monkeypatch, tmp_path):
+    for name in list(os.environ):
+        if (
+            name.startswith("VISION_")
+            or name.startswith("MINERU_")
+            or name in {"ZHIPU_API_KEY", "GEMINI_API_KEY"}
+        ):
+            monkeypatch.delenv(name, raising=False)
+    env = tmp_path / ".env"
+    env.write_text(
+        "MINERU_API_KEY=sk-mineru\n"
+        "MINERU_MODEL_VERSION=pipeline\n"
+        "MINERU_MAX_WAIT_S=120\n"
+        "GEMINI_API_KEY=gem-key\n"
+        "VISION_PROXY=http://127.0.0.1:7897\n",
+        encoding="utf-8",
+    )
+    settings = load_settings(env)
+    assert settings.mineru_api_key == "sk-mineru"
+    assert settings.mineru_model_version == "pipeline"
+    assert settings.mineru_max_wait_s == 120
+    assert settings.gemini_api_key == "gem-key"
+    assert settings.proxy == "http://127.0.0.1:7897"
 
 
 def test_env_overrides_dotenv(monkeypatch, tmp_path):

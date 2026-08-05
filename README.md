@@ -1,6 +1,6 @@
 # vision-mcp
 
-给 Codex / Claude Code / Cursor 等 MCP 客户端使用的视觉识别服务。默认调用智谱 GLM-4V-Flash（免费），支持任意 OpenAI 兼容后端与 Gemini。
+给 Codex / Claude Code / Cursor 等 MCP 客户端使用的视觉识别服务。默认调用智谱 GLM-4V-Flash（免费），支持任意 OpenAI 兼容后端、Gemini，以及 MinerU 文档解析。
 
 项目主体代码位于 `vision-mcp/` 目录。
 
@@ -15,6 +15,8 @@
 - `describe_chart` 图表解读
 - `compare_images` 双图对比
 - `tile_image` 大图切片逐块分析
+- `parse_document` 用 MinerU 把 PDF/Word/PPT/图片/HTML 解析为 Markdown
+- `parse_document_status` 查询 MinerU 解析任务状态
 
 ## 安装
 
@@ -42,9 +44,23 @@ startup_timeout_sec = 60
 ## 切换后端
 
 - OpenAI 兼容：设置 `VISION_API_BASE` / `VISION_API_KEY` / `VISION_MODEL`
-- Gemini：`VISION_PROVIDER=gemini` + `VISION_API_KEY=AIza...`
+- Gemini：`VISION_PROVIDER=gemini` + `GEMINI_API_KEY=...`（或 `VISION_API_KEY`）；如网络受限，设置 `VISION_PROXY=http://127.0.0.1:7897`（本地代理端口按需修改）
 - 本地 Ollama：`VISION_API_BASE=http://localhost:11434/v1`、`VISION_API_KEY=ollama`、`VISION_MODEL=llava`
 - 无 key 调试：`VISION_MOCK=1`
+
+## MinerU 文档解析
+
+`parse_document` 使用 [MinerU 精准解析 API](https://mineru.net/apiManage/docs)（需在 MinerU 官网申请 Token），支持 PDF、Word、PPT、图片和 HTML，输出 Markdown（表格、公式、OCR），可保存到本地。
+
+```env
+MINERU_API_KEY=你的token
+MINERU_MODEL_VERSION=vlm   # pipeline | vlm | MinerU-HTML
+MINERU_MAX_WAIT_S=600
+```
+
+- `source` 传本地路径或 URL 均可；本地文件会自动上传，URL 走服务端直传。
+- 解析较慢时会轮询等待（默认 600 秒）；如果超时返回 `pending`，可拿 `task_id`/`batch_id` 调 `parse_document_status` 继续查询。
+- HTML 文件请把 `model_version` 设为 `MinerU-HTML`；扫描件建议开启 `is_ocr`。
 
 ## 常见问题
 

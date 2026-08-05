@@ -42,6 +42,8 @@ class Settings:
     api_base: str = "https://open.bigmodel.cn/api/paas/v4/"
     api_key: str = ""
     model: str = "glm-4v-flash"
+    gemini_api_key: str = ""
+    proxy: str = ""
     timeout_ms: int = 60_000
     max_tokens: int = 1024
     max_pixels: int = 50_000_000
@@ -52,6 +54,10 @@ class Settings:
     max_dim: int = 10_000
     mock: bool = False
     output_dir: Path = Path("output")
+    mineru_api_key: str = ""
+    mineru_api_base: str = "https://mineru.net/api/v4"
+    mineru_model_version: str = "vlm"
+    mineru_max_wait_s: int = 600
 
 
 def load_settings(env_path: Path | None = None) -> Settings:
@@ -71,6 +77,8 @@ def load_settings(env_path: Path | None = None) -> Settings:
         ).strip(),
         api_key=os.environ.get("VISION_API_KEY", "").strip(),
         model=os.environ.get("VISION_MODEL", "glm-4v-flash").strip(),
+        gemini_api_key=os.environ.get("GEMINI_API_KEY", "").strip(),
+        proxy=os.environ.get("VISION_PROXY", "").strip(),
         timeout_ms=_env_int("VISION_TIMEOUT_MS", 60_000),
         max_tokens=_env_int("VISION_MAX_TOKENS", 1024),
         max_pixels=_env_int("VISION_MAX_PIXELS", 50_000_000),
@@ -81,4 +89,10 @@ def load_settings(env_path: Path | None = None) -> Settings:
         max_dim=_env_int("VISION_MAX_DIM", 10_000),
         mock=_env_bool("VISION_MOCK", False),
         output_dir=out,
+        mineru_api_key=os.environ.get("MINERU_API_KEY", "").strip(),
+        mineru_api_base=os.environ.get(
+            "MINERU_API_BASE", "https://mineru.net/api/v4"
+        ).strip(),
+        mineru_model_version=os.environ.get("MINERU_MODEL_VERSION", "vlm").strip(),
+        mineru_max_wait_s=_env_int("MINERU_MAX_WAIT_S", 600),
     )

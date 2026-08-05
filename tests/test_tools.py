@@ -41,6 +41,8 @@ def test_all_tools_registered():
         "describe_chart",
         "compare_images",
         "tile_image",
+        "parse_document",
+        "parse_document_status",
     }
 
 
@@ -156,3 +158,53 @@ def test_table_export_xlsx(tmp_path):
     assert ws["A1"].value == "Name"
     assert ws["B2"].value == "92"
     assert ws["B3"].value == "85"
+
+
+class FakeMinerUClient:
+    def __init__(self, settings):
+        self.settings = settings
+
+    async def parse(self, source, **kwargs):
+        return {
+            "state": "done",
+            "source": source,
+            "task_id": "t1",
+            "batch_id": "",
+            "markdown": "# 解析结果",
+            "md_path": "C:/out/full.md",
+        }
+
+    async def status(self, task_id="", batch_id=""):
+        return {
+            "task_id": task_id,
+            "batch_id": batch_id,
+            "state": "done",
+            "full_zip_url": "https://z/full.zip",
+        }
+
+
+def test_parse_document_tool_returns_markdown(monkeypatch, tmp_path):
+    import tools as tools_module
+
+    settings = Settings(
+        mineru_api_key="sk-mineru", mineru_max_wait_s=30, output_dir=tmp_path
+    )
+    monkeypatch.setattr(tools_module, "MinerUClient", FakeMinerUClient)
+    mcp = FastMCP("vision-mcp-test")
+    tools_module.register_tools(mcp, settings)
+    text = _call(mcp, "parse_document", {"source": "https://example.com/a.pdf"})
+    assert "MinerU 解析完成" in text
+    assert "# 解析结果" in text
+    assert "C:/out/full.md" in text
+
+
+def test_parse_document_status_tool(monkeypatch):
+    import tools as tools_module
+
+    settings = Settings(mineru_api_key="sk-mineru")
+    monkeypatch.setattr(tools_module, "MinerUClient", FakeMinerUClient)
+    mcp = FastMCP("vision-mcp-test")
+    tools_module.register_tools(mcp, settings)
+    text = _call(mcp, "parse_document_status", {"task_id": "t1"})
+    assert "t1" in text
+    assert "done" in text
