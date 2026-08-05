@@ -2,6 +2,8 @@
 
 给 Codex / Claude Code / Cursor 等 MCP 客户端使用的视觉识别服务。默认调用智谱 GLM-4V-Flash（免费），支持任意 OpenAI 兼容后端与 Gemini。
 
+项目主体代码位于 `vision-mcp/` 目录。
+
 ## 功能
 
 - `analyze_image` 通用识图
