@@ -54,6 +54,7 @@ class Settings:
     max_dim: int = 10_000
     mock: bool = False
     output_dir: Path = Path("output")
+    cache_dir: Path = Path(".cache")
     mineru_api_key: str = ""
     mineru_api_base: str = "https://mineru.net/api/v4"
     mineru_model_version: str = "vlm"
@@ -68,6 +69,11 @@ def load_settings(env_path: Path | None = None) -> Settings:
     out = Path(raw_out)
     if not out.is_absolute():
         out = Path(__file__).resolve().parent / out
+
+    raw_cache = os.environ.get("VISION_CACHE_DIR", ".cache").strip() or ".cache"
+    cache = Path(raw_cache)
+    if not cache.is_absolute():
+        cache = Path(__file__).resolve().parent / cache
 
     return Settings(
         zhipu_api_key=os.environ.get("ZHIPU_API_KEY", "").strip(),
@@ -89,6 +95,7 @@ def load_settings(env_path: Path | None = None) -> Settings:
         max_dim=_env_int("VISION_MAX_DIM", 10_000),
         mock=_env_bool("VISION_MOCK", False),
         output_dir=out,
+        cache_dir=cache,
         mineru_api_key=os.environ.get("MINERU_API_KEY", "").strip(),
         mineru_api_base=os.environ.get(
             "MINERU_API_BASE", "https://mineru.net/api/v4"

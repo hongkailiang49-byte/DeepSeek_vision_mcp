@@ -79,3 +79,33 @@ def test_env_overrides_dotenv(monkeypatch, tmp_path):
     env.write_text("VISION_MODEL=glm-4v-flash\n", encoding="utf-8")
     settings = load_settings(env)
     assert settings.model == "qwen-vl-plus"
+
+
+def test_cache_dir_default(monkeypatch, tmp_path):
+    for name in list(os.environ):
+        if (
+            name.startswith("VISION_")
+            or name.startswith("MINERU_")
+            or name in {"ZHIPU_API_KEY", "GEMINI_API_KEY"}
+        ):
+            monkeypatch.delenv(name, raising=False)
+    env = tmp_path / ".env"
+    env.write_text("# empty\n", encoding="utf-8")
+    settings = load_settings(env)
+    assert settings.cache_dir.name == ".cache"
+    assert settings.cache_dir.is_absolute()
+
+
+def test_cache_dir_from_env(monkeypatch, tmp_path):
+    for name in list(os.environ):
+        if (
+            name.startswith("VISION_")
+            or name.startswith("MINERU_")
+            or name in {"ZHIPU_API_KEY", "GEMINI_API_KEY"}
+        ):
+            monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("VISION_CACHE_DIR", str(tmp_path / "mycache"))
+    env = tmp_path / ".env"
+    env.write_text("# empty\n", encoding="utf-8")
+    settings = load_settings(env)
+    assert settings.cache_dir == tmp_path / "mycache"
