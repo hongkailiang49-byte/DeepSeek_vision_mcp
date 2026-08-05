@@ -1,0 +1,17 @@
+# 本地密钥与环境配置
+.env
+.env.local
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+
+# 运行时产物
+vision-mcp/output/
+
+# 编辑器
+.vscode/
+.idea/
