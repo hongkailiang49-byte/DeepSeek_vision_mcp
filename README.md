@@ -37,11 +37,11 @@ copy .env.example .env
 ```toml
 [mcp_servers.vision-mcp]
 command = "python"
-args = ["D:/XingKe_Total_Work/codex视觉识别/vision-mcp/main.py"]
+args = ["<项目路径>/vision-mcp/main.py"]
 startup_timeout_sec = 60
 ```
 
-如果 `python` 不在 PATH，换成 `py` 或完整 Python 路径。
+把 `<项目路径>` 换成实际目录；如果 `python` 不在 PATH，换成 `py` 或完整 Python 路径。
 
 ## 切换后端
 
@@ -53,6 +53,8 @@ startup_timeout_sec = 60
 ## 自动识别
 
 在 cc-switch 的 Prompts 面板启用“视觉自动识别”Codex 预设（写入 `~/.codex/AGENTS.md`）后，Codex 遇到与任务相关的图片会自动调用视觉工具，无需手动指定。规则：按需分析（相关才调用）、禁止反问、禁止虚构图片内容。
+
+`scan_folder(folder)` 会扫描目录中新增的图片并自动分析（结果带缓存、游标去重），可配合 Codex 桌面端的定时自动化实现“截图/设计稿进文件夹自动出分析”。
 
 ## MinerU 文档解析
 
@@ -68,8 +70,16 @@ MINERU_MAX_WAIT_S=600
 - 解析较慢时会轮询等待（默认 600 秒）；如果超时返回 `pending`，可拿 `task_id`/`batch_id` 调 `parse_document_status` 继续查询。
 - HTML 文件请把 `model_version` 设为 `MinerU-HTML`；扫描件建议开启 `is_ocr`。
 
+## 安全与隐私
+
+- 所有 API key 只存放在本地 `vision-mcp/.env`（已加入 `.gitignore`，不会被提交）；`.env.example` 仅提供占位符。
+- 仓库不包含任何真实密钥：分析缓存（`vision-mcp/.cache/`）与运行产物（`vision-mcp/output/`）同样被忽略。
+- 若怀疑 key 泄露，请到对应平台（智谱 / Gemini / MinerU）重新生成并更新本地 `.env`。
+- 示例中的 `<项目路径>` 请替换为自己的目录，不要把含个人路径的配置提交到公开仓库。
+
 ## 常见问题
 
 - 大图被压缩？检查 `VISION_AUTO_TILE` 与 `VISION_MAX_DIM`。
 - 图片过大被拒？调高 `VISION_MAX_PIXELS`。
 - 请求超时？调高 `VISION_TIMEOUT_MS`。
+- 想换缓存目录？设置 `VISION_CACHE_DIR`。
