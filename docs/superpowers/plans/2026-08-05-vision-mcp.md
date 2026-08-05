@@ -1825,7 +1825,7 @@ Expected: 全部通过
 
 - [ ] **Step 2: 检查无密钥泄漏**
 
-Run: `git grep -n "5663cd36" -- . || echo "未发现密钥"`（或实际 key 的前 8 位）
+Run: `git grep -n "<KEY_PREFIX>" -- . || echo "未发现密钥"`（换成实际 key 的前 8 位）
 Expected: 未发现密钥
 
 - [ ] **Step 3: 确认 MCP 可启动**
