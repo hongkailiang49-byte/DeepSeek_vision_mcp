@@ -94,3 +94,57 @@ def describe_image_info(loaded: LoadedImage) -> str:
 # _download_url 在 Task 4 实现，先提供占位以便本任务测试通过
 def _download_url(url: str) -> bytes:
     raise ImageError("URL 下载将在后续任务实现")
+
+
+@dataclass
+class Tile:
+    index: int
+    box: tuple[int, int, int, int]
+    image: Image.Image
+
+
+def to_data_url(img: Image.Image, fmt: str = "PNG") -> str:
+    buf = io.BytesIO()
+    img.convert("RGB").save(buf, format=fmt)
+    return f"data:image/png;base64,{base64.b64encode(buf.getvalue()).decode()}"
+
+
+def resize_to_max_dim(img: Image.Image, max_dim: int) -> Image.Image:
+    longest = max(img.width, img.height)
+    if longest <= max_dim:
+        return img
+    scale = max_dim / longest
+    new_size = (max(1, round(img.width * scale)), max(1, round(img.height * scale)))
+    return img.resize(new_size, Image.LANCZOS)
+
+
+def compute_tiles(
+    img: Image.Image, tile_size: int, overlap: int = 0
+) -> list[Tile]:
+    step_x = max(1, tile_size - overlap)
+    step_y = max(1, tile_size - overlap)
+    tiles: list[Tile] = []
+    index = 0
+    y = 0
+    while y < img.height:
+        x = 0
+        while x < img.width:
+            right = min(x + tile_size, img.width)
+            bottom = min(y + tile_size, img.height)
+            left = max(0, right - tile_size)
+            top = max(0, bottom - tile_size)
+            tiles.append(
+                Tile(
+                    index=index,
+                    box=(left, top, right, bottom),
+                    image=img.crop((left, top, right, bottom)),
+                )
+            )
+            index += 1
+            if right >= img.width:
+                break
+            x = right - overlap
+        if bottom >= img.height:
+            break
+        y = bottom - overlap
+    return tiles

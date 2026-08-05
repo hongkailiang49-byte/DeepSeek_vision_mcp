@@ -66,3 +66,44 @@ def test_describe_image_info():
     assert data["width"] == 64
     assert data["height"] == 48
     assert data["format"] == "PNG"
+
+
+from image_utils import compute_tiles, resize_to_max_dim, to_data_url
+
+
+def test_to_data_url_roundtrip():
+    img = Image.new("RGB", (10, 10), "white")
+    url = to_data_url(img)
+    assert url.startswith("data:image/png;base64,")
+
+
+def test_resize_to_max_dim():
+    img = Image.new("RGB", (2000, 1000))
+    out = resize_to_max_dim(img, 1000)
+    assert out.size == (1000, 500)
+
+
+def test_compute_tiles_grid():
+    img = Image.new("RGB", (3000, 1000))
+    tiles = compute_tiles(img, 1000, 0)
+    assert len(tiles) == 3
+    assert [t.box for t in tiles] == [
+        (0, 0, 1000, 1000),
+        (1000, 0, 2000, 1000),
+        (2000, 0, 3000, 1000),
+    ]
+
+
+def test_compute_tiles_overlap():
+    img = Image.new("RGB", (2000, 1000))
+    tiles = compute_tiles(img, 1000, 100)
+    assert len(tiles) == 3
+    assert tiles[1].box[0] == 900
+
+
+def test_compute_tiles_multi_row():
+    img = Image.new("RGB", (1500, 1500))
+    tiles = compute_tiles(img, 1000, 0)
+    assert len(tiles) == 4
+    # 边缘块贴右/下边界时左移/上移，避免切出图外
+    assert tiles[3].box == (500, 500, 1500, 1500)
