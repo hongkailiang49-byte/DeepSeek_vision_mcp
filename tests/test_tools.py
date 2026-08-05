@@ -82,3 +82,37 @@ def test_bad_source_returns_friendly_error():
     text = _call(mcp, "analyze_image", {"image": "C:/no/such.png"})
     assert text.startswith("错误：")
     assert "文件不存在" in text
+
+
+def test_auto_tile_splits_large_image():
+    settings = Settings(
+        mock=True, auto_tile=True, tile_threshold=100, tile_size=64, tile_overlap=0
+    )
+    mcp = FastMCP("vision-mcp-test")
+    register_tools(mcp, settings)
+    text = _call(mcp, "analyze_image", {"image": _data_url(width=200, height=100)})
+    assert "【块 1/8】" in text
+    assert "【块 4/8】" in text
+
+
+def test_force_tile_tool():
+    settings = Settings(
+        mock=True, auto_tile=False, tile_overlap=0, max_pixels=1_000_000
+    )
+    mcp = FastMCP("vision-mcp-test")
+    register_tools(mcp, settings)
+    text = _call(
+        mcp,
+        "tile_image",
+        {"image": _data_url(width=150, height=150), "tile_size": 100},
+    )
+    assert "【块 1/4】" in text
+    assert "【块 4/4】" in text
+
+
+def test_auto_tile_off_sends_single():
+    settings = Settings(mock=True, auto_tile=False, max_pixels=1_000_000)
+    mcp = FastMCP("vision-mcp-test")
+    register_tools(mcp, settings)
+    text = _call(mcp, "analyze_image", {"image": _data_url(width=200, height=100)})
+    assert "已收到 1 张图片" in text
