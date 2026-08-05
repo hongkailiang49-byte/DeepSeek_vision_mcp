@@ -87,7 +87,7 @@ class GeminiProvider(BaseProvider):
         key = self.settings.api_key or self.settings.zhipu_api_key
         if not key:
             raise ProviderError("缺少 Gemini API key（VISION_API_KEY）")
-        model = self.settings.model or "gemini-2.5-flash"
+        model = self.settings.model or "gemini-flash-latest"
         url = (
             f"https://generativelanguage.googleapis.com/v1beta/models/"
             f"{model}:generateContent"
