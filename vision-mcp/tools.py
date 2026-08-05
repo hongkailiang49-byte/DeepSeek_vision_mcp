@@ -210,6 +210,74 @@ async def auto_analyze(settings: Settings, source: str, hint: str = "") -> str:
     return f"图片类型：{scene}\n\n{result}"
 
 
+_IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"}
+
+
+def _load_cursor(cache_dir: Path) -> dict:
+    f = cache_dir / "scan_cursor.json"
+    try:
+        data = json.loads(f.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _save_cursor(cache_dir: Path, data: dict) -> None:
+    f = cache_dir / "scan_cursor.json"
+    f.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+
+
+async def scan_folder_impl(
+    settings: Settings, folder: str, since: str = "", scene: str = "auto"
+) -> str:
+    target = Path(folder)
+    if not target.is_dir():
+        raise ValueError(f"目录不存在：{folder}")
+    cache_dir = settings.cache_dir
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    cursor = _load_cursor(cache_dir)
+
+    threshold = None
+    if since.strip():
+        try:
+            threshold = datetime.fromisoformat(since.strip())
+        except ValueError as exc:
+            raise ValueError("since 格式应为 ISO 时间，例如 2026-08-05T10:00:00") from exc
+    else:
+        raw = cursor.get(str(target.resolve()))
+        if raw:
+            try:
+                threshold = datetime.fromisoformat(raw)
+            except ValueError:
+                threshold = None
+
+    files = [
+        p
+        for p in target.rglob("*")
+        if p.is_file() and p.suffix.lower() in _IMAGE_SUFFIXES
+    ]
+    files.sort(key=lambda p: p.stat().st_mtime)
+    if threshold is not None:
+        files = [
+            p
+            for p in files
+            if datetime.fromtimestamp(p.stat().st_mtime) >= threshold
+        ]
+
+    now = datetime.now().isoformat()
+    if not files:
+        _save_cursor(cache_dir, {**cursor, str(target.resolve()): now})
+        return "没有新图片。"
+
+    lines = []
+    for idx, p in enumerate(files, 1):
+        hint = "" if scene in {"", "auto"} else scene
+        result = await auto_analyze(settings, str(p), hint)
+        lines.append(f"### {idx}. {p.name}\n{p}\n\n{result}")
+    _save_cursor(cache_dir, {**cursor, str(target.resolve()): now})
+    return "\n\n".join(lines)
+
+
 def register_tools(mcp: FastMCP, settings: Settings) -> None:
     @mcp.tool()
     async def analyze_image(image: str, prompt: str = "", scene: str = "general") -> str:
@@ -348,5 +416,13 @@ def register_tools(mcp: FastMCP, settings: Settings) -> None:
         """自动识别图片：先判断类型（UI/表格/OCR/图表/文档/海报/通用）再按场景分析。hint 可选，已知类型时跳过判断。"""
         try:
             return await auto_analyze(settings, source, hint)
+        except Exception as exc:
+            return _error_text(exc)
+
+    @mcp.tool()
+    async def scan_folder(folder: str, since: str = "", scene: str = "auto") -> str:
+        """扫描目录中新增图片并自动分析；since 为 ISO 时间（留空使用上次游标）。可配合定时自动化定期调用。"""
+        try:
+            return await scan_folder_impl(settings, folder, since, scene)
         except Exception as exc:
             return _error_text(exc)

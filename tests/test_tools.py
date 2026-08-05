@@ -45,6 +45,7 @@ def test_all_tools_registered():
         "parse_document",
         "parse_document_status",
         "analyze_any",
+        "scan_folder",
     }
 
 
@@ -235,6 +236,74 @@ def test_analyze_any_cache_hit(monkeypatch, tmp_path):
     assert "第一次结果" in first
     assert "【缓存】" in second
     assert "第一次结果" in second
+
+
+def test_scan_folder_registered():
+    mcp = _make_mcp()
+
+    async def run():
+        tools = await mcp.list_tools()
+        return {t.name for t in tools}
+
+    names = asyncio.run(run())
+    assert "scan_folder" in names
+
+
+def _make_png(path, color=(10, 20, 30), width=40, height=30):
+    Image.new("RGB", (width, height), color).save(path, format="PNG")
+
+
+def test_scan_folder_analyzes_new_images(monkeypatch, tmp_path):
+    import tools as tools_module
+
+    folder = tmp_path / "shots"
+    folder.mkdir()
+    _make_png(folder / "a.png", (1, 2, 3))
+    _make_png(folder / "b.png", (4, 5, 6))
+    fake = FakeAutoProvider(detections=["ui", "table"], analyses=["A 分析", "B 分析"])
+    monkeypatch.setattr(tools_module, "get_provider", lambda s: fake)
+    settings = Settings(
+        auto_tile=False, max_pixels=1_000_000, cache_dir=tmp_path / "cache"
+    )
+    mcp = FastMCP("vision-mcp-test")
+    tools_module.register_tools(mcp, settings)
+
+    text = _call(mcp, "scan_folder", {"folder": str(folder)})
+    assert "a.png" in text
+    assert "b.png" in text
+    assert "A 分析" in text
+    assert "B 分析" in text
+
+    text2 = _call(mcp, "scan_folder", {"folder": str(folder)})
+    assert "没有新图片" in text2
+    assert (tmp_path / "cache" / "scan_cursor.json").is_file()
+
+
+def test_scan_folder_since_filter(monkeypatch, tmp_path):
+    import os
+
+    import tools as tools_module
+
+    folder = tmp_path / "shots"
+    folder.mkdir()
+    f1 = folder / "old.png"
+    f2 = folder / "new.png"
+    _make_png(f1)
+    _make_png(f2)
+    os.utime(f1, (1_700_000_000, 1_700_000_000))
+    os.utime(f2, (1_800_000_000, 1_800_000_000))
+    fake = FakeAutoProvider(detections=["ui"], analyses=["新图分析"])
+    monkeypatch.setattr(tools_module, "get_provider", lambda s: fake)
+    settings = Settings(
+        auto_tile=False, max_pixels=1_000_000, cache_dir=tmp_path / "cache"
+    )
+    mcp = FastMCP("vision-mcp-test")
+    tools_module.register_tools(mcp, settings)
+
+    since = "2027-01-01T00:00:00"
+    text = _call(mcp, "scan_folder", {"folder": str(folder), "since": since})
+    assert "new.png" in text
+    assert "old.png" not in text
 
 
 class FakeMinerUClient:
