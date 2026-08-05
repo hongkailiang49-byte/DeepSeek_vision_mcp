@@ -43,7 +43,7 @@ class Settings:
     api_key: str = ""
     model: str = "glm-4v-flash"
     timeout_ms: int = 60_000
-    max_tokens: int = 4096
+    max_tokens: int = 1024
     max_pixels: int = 50_000_000
     auto_tile: bool = True
     tile_threshold: int = 4096
@@ -72,7 +72,7 @@ def load_settings(env_path: Path | None = None) -> Settings:
         api_key=os.environ.get("VISION_API_KEY", "").strip(),
         model=os.environ.get("VISION_MODEL", "glm-4v-flash").strip(),
         timeout_ms=_env_int("VISION_TIMEOUT_MS", 60_000),
-        max_tokens=_env_int("VISION_MAX_TOKENS", 4096),
+        max_tokens=_env_int("VISION_MAX_TOKENS", 1024),
         max_pixels=_env_int("VISION_MAX_PIXELS", 50_000_000),
         auto_tile=_env_bool("VISION_AUTO_TILE", True),
         tile_threshold=_env_int("VISION_AUTO_TILE_THRESHOLD", 4096),
