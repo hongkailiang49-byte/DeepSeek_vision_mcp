@@ -14,7 +14,7 @@ def test_load_settings_uses_defaults(monkeypatch, tmp_path):
     env = tmp_path / ".env"
     env.write_text("# empty\n", encoding="utf-8")
     settings = load_settings(env)
-    assert settings.model == "glm-4v-flash"
+    assert settings.model == "glm-4.6v-flash"
     assert settings.provider == "auto"
     assert settings.auto_tile is True
     assert settings.timeout_ms == 60_000
@@ -37,7 +37,7 @@ def test_load_settings_reads_env_file(monkeypatch, tmp_path):
     env = tmp_path / ".env"
     env.write_text(
         "ZHIPU_API_KEY=sk-test\n"
-        "VISION_MODEL=glm-4v-flash\n"
+        "VISION_MODEL=glm-4.6v-flash\n"
         "VISION_AUTO_TILE=0\n"
         "VISION_TIMEOUT_MS=30000\n",
         encoding="utf-8",
@@ -76,7 +76,7 @@ def test_load_settings_reads_mineru_gemini_proxy(monkeypatch, tmp_path):
 def test_env_overrides_dotenv(monkeypatch, tmp_path):
     monkeypatch.setenv("VISION_MODEL", "qwen-vl-plus")
     env = tmp_path / ".env"
-    env.write_text("VISION_MODEL=glm-4v-flash\n", encoding="utf-8")
+    env.write_text("VISION_MODEL=glm-4.6v-flash\n", encoding="utf-8")
     settings = load_settings(env)
     assert settings.model == "qwen-vl-plus"
 

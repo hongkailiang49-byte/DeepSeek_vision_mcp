@@ -41,7 +41,7 @@ class Settings:
     provider: str = "auto"
     api_base: str = "https://open.bigmodel.cn/api/paas/v4/"
     api_key: str = ""
-    model: str = "glm-4v-flash"
+    model: str = "glm-4.6v-flash"
     gemini_api_key: str = ""
     proxy: str = ""
     timeout_ms: int = 60_000
@@ -82,7 +82,7 @@ def load_settings(env_path: Path | None = None) -> Settings:
             "VISION_API_BASE", "https://open.bigmodel.cn/api/paas/v4/"
         ).strip(),
         api_key=os.environ.get("VISION_API_KEY", "").strip(),
-        model=os.environ.get("VISION_MODEL", "glm-4v-flash").strip(),
+        model=os.environ.get("VISION_MODEL", "glm-4.6v-flash").strip(),
         gemini_api_key=os.environ.get("GEMINI_API_KEY", "").strip(),
         proxy=os.environ.get("VISION_PROXY", "").strip(),
         timeout_ms=_env_int("VISION_TIMEOUT_MS", 60_000),

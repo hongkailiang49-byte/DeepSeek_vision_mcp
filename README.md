@@ -1,6 +1,6 @@
 # vision-mcp
 
-给 Codex / Claude Code / Cursor 等 MCP 客户端使用的视觉识别服务。默认调用智谱 GLM-4V-Flash（免费），支持任意 OpenAI 兼容后端、Gemini，以及 MinerU 文档解析。
+给 Codex / Claude Code / Cursor 等 MCP 客户端使用的视觉识别服务。默认调用智谱 GLM-4.6V-Flash（免费），支持任意 OpenAI 兼容后端、Gemini，以及 MinerU 文档解析。
 
 项目主体代码位于 `vision-mcp/` 目录。
 
@@ -28,7 +28,7 @@ python -m pip install -r requirements.txt
 copy .env.example .env
 ```
 
-编辑 `.env`，填入 `ZHIPU_API_KEY`（智谱开放平台 https://open.bigmodel.cn 免费获取，模型 `glm-4v-flash` 免费）。
+编辑 `.env`，填入 `ZHIPU_API_KEY`（智谱开放平台 https://open.bigmodel.cn 免费获取，模型 `glm-4.6v-flash` 免费）。
 
 ## 接入 Codex
 

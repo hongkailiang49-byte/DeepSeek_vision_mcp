@@ -44,11 +44,11 @@ class FakeClient:
 
 
 def test_payload_shape():
-    settings = Settings(api_key="k", model="glm-4v-flash")
+    settings = Settings(api_key="k", model="glm-4.6v-flash")
     provider = OpenAICompatibleProvider(settings)
     img = Image.new("RGB", (10, 10))
     payload = provider._payload("describe", [img])
-    assert payload["model"] == "glm-4v-flash"
+    assert payload["model"] == "glm-4.6v-flash"
     assert payload["messages"][0]["content"][0] == {"type": "text", "text": "describe"}
     assert payload["messages"][0]["content"][1]["type"] == "image_url"
     assert payload["messages"][0]["content"][1]["image_url"]["url"].startswith(
